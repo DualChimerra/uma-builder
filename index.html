@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Uma Deck Builder</title>
+  <meta name="description" content="Составитель колод карт поддержки для Uma Musume: Pretty Derby (Global)">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏇</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand">
+          <span class="brand-icon">🏇</span>
+          <span class="brand-name">Uma Deck Builder</span>
+        </div>
+        <nav class="tabs" id="tabs">
+          <button class="tab active" data-tab="deck">Колода</button>
+          <button class="tab" data-tab="cards">Карты</button>
+          <button class="tab" data-tab="skills">Скиллы</button>
+          <button class="tab" data-tab="inventory">Инвентарь <span class="inv-count" id="inv-count">0</span></button>
+          <button class="tab" data-tab="settings">Настройки</button>
+        </nav>
+        <button class="theme-toggle" id="theme-toggle" title="Переключить тему">🌙</button>
+      </div>
+    </header>
+
+    <main id="main">
+      <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <p>Загрузка базы данных…</p>
+      </div>
+      <section class="view" id="view-deck" hidden></section>
+      <section class="view" id="view-cards" hidden></section>
+      <section class="view" id="view-skills" hidden></section>
+      <section class="view" id="view-inventory" hidden></section>
+      <section class="view" id="view-settings" hidden></section>
+    </main>
+
+    <div class="modal-backdrop" id="modal" hidden>
+      <div class="modal" id="modal-content"></div>
+    </div>
+
+    <div class="toast" id="toast" hidden></div>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
