@@ -1,0 +1,40 @@
+name: Update data from GameTora
+
+on:
+  schedule:
+    # каждые 12 часов — подхватывает новые карты/лошадей после обновлений игры
+    - cron: '17 3,15 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-data
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Update data and assets
+        run: node scripts/update-data.mjs
+
+      - name: Commit and push if changed
+        run: |
+          git add data assets
+          if git diff --cached --quiet; then
+            echo "No changes — GameTora data is up to date."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          SUMMARY=$(node -e "const m=require('./data/meta.json');console.log(\`\${m.counts.cards} cards, \${m.counts.skills} skills, \${m.counts.trainees} trainees\`)")
+          git commit -m "data: auto-update from GameTora ($SUMMARY)"
+          git push

@@ -38,17 +38,19 @@ const manifest = await fetchJson(`${GT}/data/manifests/umamusume.json`);
 
 const supportsHash = manifest['support-cards'];
 const skillsHash = manifest['skills'];
+const charsHash = manifest['character-cards'];
 if (!supportsHash || !skillsHash) throw new Error('В манифесте нет ключей support-cards/skills');
 
-console.log(`support-cards: ${supportsHash}, skills: ${skillsHash}`);
+console.log(`support-cards: ${supportsHash}, skills: ${skillsHash}, character-cards: ${charsHash}`);
 const effectsHash = manifest['support_effects'];
-const [rawCards, rawSkills, rawEffects] = await Promise.all([
+const [rawCards, rawSkills, rawEffects, rawChars] = await Promise.all([
   fetchJson(`${GT}/data/umamusume/support-cards.${supportsHash}.json`),
   fetchJson(`${GT}/data/umamusume/skills.${skillsHash}.json`),
   effectsHash ? fetchJson(`${GT}/data/umamusume/support_effects.${effectsHash}.json`) : [],
+  charsHash ? fetchJson(`${GT}/data/umamusume/character-cards.${charsHash}.json`) : [],
 ]);
 
-console.log(`Карт: ${rawCards.length}, скиллов: ${rawSkills.length}`);
+console.log(`Карт: ${rawCards.length}, скиллов: ${rawSkills.length}, персонажей: ${rawChars.length}`);
 
 // ---- Обработка карт ----
 const cards = rawCards.map((c) => ({
@@ -65,46 +67,69 @@ const cards = rawCards.map((c) => ({
   obtained: c.obtained || null,
   url: c.url_name,
   effects: c.effects || [],
+  unique: c.unique || null, // {effects:[{type,value}], level}
 }));
 
-// ---- Обработка скиллов (только те, что дают карты поддержки) ----
-const referenced = new Set();
-for (const c of cards) {
-  c.hints.forEach((id) => referenced.add(id));
-  c.events.forEach((id) => referenced.add(id));
-}
+// ---- Скиллы: вся база (для просмотра); карты ссылаются на подмножество ----
+const skills = rawSkills.map((s) => ({
+  id: s.id,
+  name: s.name_en || s.enname,
+  name_jp: s.jpname,
+  desc: s.endesc || s.desc_en || '',
+  rarity: s.rarity, // 1=белый, 2=золотой, 3-5=уникальные, 6=эволюция
+  icon: s.iconid,
+  cost: s.cost ?? null,
+}));
 
-const skills = rawSkills
-  .filter((s) => referenced.has(s.id))
-  .map((s) => ({
-    id: s.id,
-    name: s.name_en || s.enname,
-    name_jp: s.jpname,
-    desc: s.endesc || s.desc_en || '',
-    rarity: s.rarity, // 1=обычный (белый), 2=золотой
-    icon: s.iconid,
-    cost: s.cost ?? null,
-  }));
+// ---- Тренируемые персонажи (для бонусов роста статов) ----
+const trainees = rawChars.map((c) => ({
+  id: c.card_id,
+  char_id: c.char_id,
+  name: c.name_en,
+  title: c.title_en_gl || (c.title ? `[${c.title}]` : ''),
+  rarity: c.rarity,
+  growth: c.stat_bonus || [0, 0, 0, 0, 0], // [speed, stamina, power, guts, wit] в %
+  release_en: c.release_en || null,
+  url: c.url_name,
+}));
 
 const meta = {
   updated: new Date().toISOString(),
   source: 'gametora.com',
-  manifest: { supports: supportsHash, skills: skillsHash },
-  counts: { cards: cards.length, skills: skills.length },
+  manifest: { supports: supportsHash, skills: skillsHash, chars: charsHash },
+  counts: { cards: cards.length, skills: skills.length, trainees: trainees.length },
 };
 
-await fs.mkdir(path.join(ROOT, 'data'), { recursive: true });
-await fs.writeFile(path.join(ROOT, 'data', 'cards.json'), JSON.stringify(cards));
-await fs.writeFile(path.join(ROOT, 'data', 'skills.json'), JSON.stringify(skills));
 const effects = (rawEffects || []).map((e) => ({
   id: e.id,
   name: e.name_en_eon || e.name_en,
   desc: e.desc_en_eon || e.desc_en || '',
   symbol: e.symbol || null,
 }));
-await fs.writeFile(path.join(ROOT, 'data', 'effects.json'), JSON.stringify(effects));
-await fs.writeFile(path.join(ROOT, 'data', 'meta.json'), JSON.stringify(meta, null, 2));
-console.log(`Записано: data/cards.json (${cards.length}), data/skills.json (${skills.length})`);
+
+await fs.mkdir(path.join(ROOT, 'data'), { recursive: true });
+
+// пишем файл только если содержимое изменилось (чтобы CI не делал пустых коммитов)
+let changed = false;
+async function writeIfChanged(name, content) {
+  const p = path.join(ROOT, 'data', name);
+  const old = await fs.readFile(p, 'utf8').catch(() => null);
+  if (old === content) return;
+  await fs.writeFile(p, content);
+  changed = true;
+  console.log(`  обновлён data/${name}`);
+}
+
+await writeIfChanged('cards.json', JSON.stringify(cards));
+await writeIfChanged('skills.json', JSON.stringify(skills));
+await writeIfChanged('trainees.json', JSON.stringify(trainees));
+await writeIfChanged('effects.json', JSON.stringify(effects));
+if (changed) {
+  await fs.writeFile(path.join(ROOT, 'data', 'meta.json'), JSON.stringify(meta, null, 2));
+}
+console.log(changed
+  ? `Данные обновлены: карт ${cards.length}, скиллов ${skills.length}, персонажей ${trainees.length}`
+  : 'Изменений в данных нет.');
 
 if (noAssets) {
   console.log('Пропускаю ассеты (--no-assets)');

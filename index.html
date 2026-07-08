@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -20,20 +20,20 @@
           <span class="brand-name">Uma Deck Builder</span>
         </div>
         <nav class="tabs" id="tabs">
-          <button class="tab active" data-tab="deck">Колода</button>
-          <button class="tab" data-tab="cards">Карты</button>
-          <button class="tab" data-tab="skills">Скиллы</button>
-          <button class="tab" data-tab="inventory">Инвентарь <span class="inv-count" id="inv-count">0</span></button>
-          <button class="tab" data-tab="settings">Настройки</button>
+          <button class="tab active" data-tab="deck">Deck Builder</button>
+          <button class="tab" data-tab="cards">Cards</button>
+          <button class="tab" data-tab="skills">Skills</button>
+          <button class="tab" data-tab="inventory">Inventory <span class="inv-count" id="inv-count">0</span></button>
+          <button class="tab" data-tab="settings">Settings</button>
         </nav>
-        <button class="theme-toggle" id="theme-toggle" title="Переключить тему">🌙</button>
+        <button class="theme-toggle" id="theme-toggle" title="Toggle theme">🌙</button>
       </div>
     </header>
 
     <main id="main">
       <div class="loading" id="loading">
         <div class="spinner"></div>
-        <p>Загрузка базы данных…</p>
+        <p>Loading database…</p>
       </div>
       <section class="view" id="view-deck" hidden></section>
       <section class="view" id="view-cards" hidden></section>

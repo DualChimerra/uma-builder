@@ -8,6 +8,8 @@ const defaults = () => ({
     wanted: [],           // [{id, prio}] prio: 1|2|3
     constraints: {},      // type -> min count
     useBorrow: true,
+    trainee: null,        // trainee card id (for growth bonuses)
+    targets: {},          // stat -> target value (0/absent = don't care)
   },
   settings: {
     theme: 'auto',        // auto | light | dark
@@ -19,6 +21,7 @@ const defaults = () => ({
       event: 0.65,                // множитель ивентовых скиллов
       dup: 0.15,                  // ценность дубликата скилла
       quality: 1.0,               // вес "качества" карты (редкость + LB)
+      stat: 60,                   // вклад попадания в целевые статы (в очках)
     },
   },
 });

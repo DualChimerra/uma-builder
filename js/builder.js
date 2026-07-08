@@ -1,31 +1,27 @@
-// Алгоритм составления колоды.
+// Deck building algorithm.
 //
-// Жадный алгоритм с учётом покрытия: на каждом шаге выбирается карта
-// с максимальным приростом ценности. Ценность складывается из:
-//  - веса нужных скиллов (приоритет 1 > 2 > 3, золотые выше обычных того же приоритета);
-//  - повторное покрытие скилла даёт лишь малую долю веса (dup);
-//  - "качества" карты: редкость + уровень анлока (LB), приоритет более раскрытым;
-//  - ивентовые скиллы ценятся ниже хинтов (не гарантированы).
-// Ограничения: типы (минимум карт типа X), не более 1 карты на персонажа,
-// 5 карт из инвентаря + 1 заимствованная (из полного пула, считается MLB).
+// Coverage-aware greedy: each step picks the card with the best marginal value.
+// Value =
+//  - weights of wanted skills (priority 1 > 2 > 3; gold > normal of same priority);
+//  - repeated coverage of a skill is worth only a small fraction (dup);
+//  - card "quality": rarity + limit break level (prefer higher uncap);
+//  - event skills are worth less than hints (not guaranteed);
+//  - optional: how much the deck's expected training output approaches
+//    the target stats (real training math, see trainer.js) — soft term.
+// Constraints: type minimums, max 1 card per character,
+// 5 cards from inventory + 1 borrowed (full pool, treated as MLB).
 
 import { db, cardPool } from './data.js';
+import { estimateStats } from './trainer.js';
 
-/**
- * @param {Object} p
- * @param {Array<{id:number, prio:1|2|3}>} p.wanted - нужные скиллы
- * @param {Object} p.constraints - {type: minCount}
- * @param {Object} p.inventory - {cardId: lb}
- * @param {boolean} p.useBorrow - использовать слот заимствованной карты
- * @param {boolean} p.globalOnly - пул только из карт глобальной версии
- * @param {Object} p.weights
- */
-export function buildDeck({ wanted, constraints, inventory, useBorrow, globalOnly, weights }) {
+export function buildDeck({ wanted, constraints, inventory, useBorrow, globalOnly, weights, targets = {}, trainee = null }) {
   const W = weights;
   const pool = cardPool(globalOnly);
   const wantedMap = new Map(wanted.map((w) => [w.id, w.prio]));
+  const growth = trainee ? (db.traineeById.get(trainee)?.growth || null) : null;
+  const hasTargets = Object.values(targets).some((v) => v > 0);
+  const statWeight = hasTargets ? (W.stat || 0) : 0;
 
-  // ценность скилла (полная, при первом покрытии)
   const skillWeight = (skillId) => {
     const prio = wantedMap.get(skillId);
     if (!prio) return 0;
@@ -37,7 +33,6 @@ export function buildDeck({ wanted, constraints, inventory, useBorrow, globalOnl
   const quality = (card, lb) =>
     W.quality * ((({ 1: 8, 2: 18, 3: 30 })[card.rarity] || 0) + lb * ({ 1: 2, 2: 3, 3: 5 }[card.rarity] || 3));
 
-  // кандидаты
   const owned = [];
   for (const [idStr, lb] of Object.entries(inventory)) {
     const card = db.cardById.get(Number(idStr));
@@ -50,15 +45,15 @@ export function buildDeck({ wanted, constraints, inventory, useBorrow, globalOnl
 
   const picked = [];
   const usedChars = new Set();
-  const covered = new Map(); // skillId -> сколько раз покрыт
+  const covered = new Map();
   const typeCount = {};
   let ownedUsed = 0;
   let borrowUsed = false;
+  let curStatScore = 0;
 
-  const req = { ...constraints }; // type -> min
+  const req = { ...constraints };
 
   const feasible = (candType, slotsLeftAfter) => {
-    // после выбора кандидата должно хватить слотов на оставшиеся минимумы
     let need = 0;
     for (const [t, min] of Object.entries(req)) {
       const have = (typeCount[t] || 0) + (candType === t ? 1 : 0);
@@ -67,7 +62,7 @@ export function buildDeck({ wanted, constraints, inventory, useBorrow, globalOnl
     return need <= slotsLeftAfter;
   };
 
-  const marginalGain = (cand) => {
+  const skillGain = (cand) => {
     let gain = 0;
     const seen = new Set();
     for (const sid of cand.card.hints) {
@@ -85,6 +80,15 @@ export function buildDeck({ wanted, constraints, inventory, useBorrow, globalOnl
     return gain + quality(cand.card, cand.lb);
   };
 
+  const statGain = (cand) => {
+    if (!statWeight) return 0;
+    const trial = [...picked, cand];
+    const { score } = estimateStats(trial.map((p) => ({ card: p.card, lb: p.lb })), growth, targets);
+    return statWeight * score - curStatScore;
+  };
+
+  const marginalGain = (cand) => skillGain(cand) + statGain(cand);
+
   while (picked.length < slots) {
     const slotsLeftAfter = slots - picked.length - 1;
     let best = null;
@@ -100,8 +104,8 @@ export function buildDeck({ wanted, constraints, inventory, useBorrow, globalOnl
     if (ownedUsed < maxOwned) {
       for (const c of owned) consider(c);
     }
-    // заимствованный слот пробуем в последнюю очередь, когда известны дыры,
-    // либо если из своих карт поставить некого
+    // try the borrow slot last, when the coverage gaps are known,
+    // or when no owned card can be placed
     const borrowTurn = useBorrow && !borrowUsed &&
       (picked.length === slots - 1 || ownedUsed >= Math.min(maxOwned, owned.length) || !best);
     if (borrowTurn) {
@@ -109,8 +113,8 @@ export function buildDeck({ wanted, constraints, inventory, useBorrow, globalOnl
     }
 
     if (!best) {
-      // ограничения по типам не выполнить имеющимися картами —
-      // заполняем оставшиеся слоты лучшими из доступных без учёта минимумов
+      // type minimums are unsatisfiable with available cards —
+      // fill remaining slots with the best cards ignoring minimums
       if (ownedUsed < maxOwned) {
         for (const c of owned) {
           if (usedChars.has(c.card.char_id)) continue;
@@ -127,7 +131,7 @@ export function buildDeck({ wanted, constraints, inventory, useBorrow, globalOnl
       }
     }
 
-    if (!best) break; // больше некого ставить
+    if (!best) break;
 
     picked.push(best);
     usedChars.add(best.card.char_id);
@@ -136,9 +140,12 @@ export function buildDeck({ wanted, constraints, inventory, useBorrow, globalOnl
     else { ownedUsed++; owned.splice(owned.indexOf(best), 1); }
     for (const sid of best.card.hints) if (wantedMap.has(sid)) covered.set(sid, (covered.get(sid) || 0) + 1);
     for (const sid of best.card.events) if (wantedMap.has(sid)) covered.set(sid, (covered.get(sid) || 0) + 1);
+    if (statWeight) {
+      const { score } = estimateStats(picked.map((p) => ({ card: p.card, lb: p.lb })), growth, targets);
+      curStatScore = statWeight * score;
+    }
   }
 
-  // --- итоговое покрытие ---
   const coverage = wanted.map((w) => {
     const sources = [];
     for (const p of picked) {
@@ -150,6 +157,10 @@ export function buildDeck({ wanted, constraints, inventory, useBorrow, globalOnl
 
   const constraintsOk = Object.entries(req).every(([t, min]) => (typeCount[t] || 0) >= (min || 0));
 
+  const statEstimate = hasTargets
+    ? estimateStats(picked.map((p) => ({ card: p.card, lb: p.lb })), growth, targets)
+    : null;
+
   return {
     deck: picked,
     coverage,
@@ -157,5 +168,6 @@ export function buildDeck({ wanted, constraints, inventory, useBorrow, globalOnl
     constraintsOk,
     coveredCount: coverage.filter((c) => c.sources.length > 0).length,
     totalWanted: wanted.length,
+    statEstimate,
   };
 }

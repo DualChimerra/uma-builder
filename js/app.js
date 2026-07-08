@@ -41,7 +41,7 @@ async function init() {
   try {
     await loadData();
   } catch (err) {
-    document.getElementById('loading').innerHTML = `<p>Не удалось загрузить базу данных 😿<br>${err.message}</p>`;
+    document.getElementById('loading').innerHTML = `<p>Failed to load the database 😿<br>${err.message}</p>`;
     return;
   }
 
