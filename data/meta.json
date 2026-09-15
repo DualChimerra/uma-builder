@@ -1,10 +1,10 @@
 {
-  "updated": "2026-09-11T18:37:03.831Z",
+  "updated": "2026-09-15T19:02:07.645Z",
   "source": "gametora.com",
   "manifest": {
-    "supports": "aabfe766",
-    "skills": "1e69b383",
-    "chars": "a89f3d4f"
+    "supports": "1636fe06",
+    "skills": "280f32e1",
+    "chars": "d268d332"
   },
   "counts": {
     "cards": 559,
