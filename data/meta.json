@@ -1,13 +1,13 @@
 {
-  "updated": "2026-09-24T08:31:41.535Z",
+  "updated": "2026-09-29T09:54:38.568Z",
   "source": "gametora.com",
   "manifest": {
-    "supports": "88dea522",
-    "skills": "f4a1e02d",
-    "chars": "679f7c2e"
+    "supports": "d7d23d86",
+    "skills": "609afe88",
+    "chars": "e9e9ee6d"
   },
   "counts": {
-    "cards": 559,
+    "cards": 560,
     "skills": 1910,
     "trainees": 268
   }
